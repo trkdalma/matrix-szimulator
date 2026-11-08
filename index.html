@@ -1,0 +1,981 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Mátrix Sétálója</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=JetBrains+Mono:wght@500;700&family=Nunito:wght@400;600;800&display=swap">
+<style>
+/* Layout: a bal oszlop a játék (sziget, dobás, gombok), a jobb oszlop az eredmények; telefonon egymás alatt. */
+:root{
+  --display:'Fredoka','Nunito',system-ui,sans-serif;
+  --body:'Nunito',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+
+  --bg:#E6F5F9; --surface:#FFFFFF; --surface-2:#EEF8FB; --line:#CBE3EC;
+  --ink:#0B2A3C; --ink-2:#3F6275; --outline:#0B2A3C;
+  --sea:#63CBEA; --sea-line:rgba(11,42,60,.14);
+  --sand:#F8DB92; --sand-2:#F1C970; --shore:#D99A2B; --grid:rgba(11,42,60,.14);
+  --c-up:#FFC93C; --c-down:#FF6B6B; --c-right:#3DDC97; --c-left:#9B8CFF; --on-dir:#0B2A3C;
+  --robot:#F7FAFD;
+  --btn-bg:#0B2A3C; --btn-fg:#FFFFFF;
+  --fall:#B42318; --fall-bg:#FFE3E0; --ok:#067647; --ok-bg:#D4F4E4;
+  --chart:#5B3FD9;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#07131D; --surface:#0E2434; --surface-2:#133046; --line:#1F4660;
+    --ink:#E7F5FB; --ink-2:#9CBBCB; --outline:#04101A;
+    --sea:#12577F; --sea-line:rgba(231,245,251,.14);
+    --sand:#C79A4A; --sand-2:#B4873C; --shore:#F0C06A; --grid:rgba(4,16,26,.35);
+    --btn-bg:#E7F5FB; --btn-fg:#07131D;
+    --fall:#FFB4AC; --fall-bg:#4A2023; --ok:#7BE2B0; --ok-bg:#0F3D2E;
+    --chart:#B3A6FF;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#07131D; --surface:#0E2434; --surface-2:#133046; --line:#1F4660;
+  --ink:#E7F5FB; --ink-2:#9CBBCB; --outline:#04101A;
+  --sea:#12577F; --sea-line:rgba(231,245,251,.14);
+  --sand:#C79A4A; --sand-2:#B4873C; --shore:#F0C06A; --grid:rgba(4,16,26,.35);
+  --btn-bg:#E7F5FB; --btn-fg:#07131D;
+  --fall:#FFB4AC; --fall-bg:#4A2023; --ok:#7BE2B0; --ok-bg:#0F3D2E;
+  --chart:#B3A6FF;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:var(--body); font-size:16px; line-height:1.45;
+  padding-block:16px 40px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.wrap{max-width:1040px;margin-inline:auto;display:grid;gap:16px}
+header{display:grid;gap:6px}
+.eyebrow{margin:0;font:500 12px var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2)}
+h1{margin:0;font:700 clamp(32px,9vw,46px)/1 var(--display);text-wrap:balance}
+.lead{margin:0;color:var(--ink-2);max-width:60ch;font-size:15px}
+h2{margin:0 0 10px;font:600 20px/1.2 var(--display)}
+
+.layout{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:880px){.layout{grid-template-columns:minmax(0,448px) minmax(0,1fr);align-items:start}}
+.col{display:grid;gap:16px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px;min-width:0}
+.play{display:grid;gap:12px}
+
+/* Sziget */
+.board{width:min(100%,440px,56vh);margin-inline:auto;aspect-ratio:1;min-width:0}
+.board svg{display:block;width:100%;height:100%;border-radius:14px}
+.robot{transition:transform .38s cubic-bezier(.3,1.5,.5,1)}
+.eyes-x{display:none}
+.fell .eyes-ok{display:none}
+.fell .eyes-x{display:inline}
+.fell .rbody{opacity:.75}
+.rp{fill:none;stroke:var(--ink);stroke-width:.5;transform-box:fill-box;transform-origin:center;opacity:0}
+.fell .rp{animation:rip 1.2s ease-out infinite}
+.fell .rp2{animation-delay:.6s}
+@keyframes rip{0%{transform:scale(.4);opacity:.9}100%{transform:scale(2.5);opacity:0}}
+
+/* Állapot */
+.status{min-height:50px;display:flex;align-items:center;border-radius:12px;padding:10px 14px;background:var(--surface-2);font-weight:800;font-size:15px}
+.status.fell{background:var(--fall-bg);color:var(--fall)}
+.status.ok{background:var(--ok-bg);color:var(--ok)}
+
+/* Dobás: négy irány, egyenként 25% */
+.dirs{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.dirs li{
+  display:grid;justify-items:center;gap:2px;padding:8px 2px 7px;text-align:center;
+  background:var(--surface-2);border:2px solid var(--line);border-radius:14px;
+  transition:transform .12s,background .12s,border-color .12s;
+}
+.dirs .num{width:22px;height:22px;border-radius:50%;background:var(--c);color:var(--on-dir);font:700 12px/22px var(--mono)}
+.dirs .arr{width:26px;height:26px;display:block}
+.dirs .name{font-weight:800;font-size:13px}
+.dirs .pct{font:500 11px var(--mono);color:var(--ink-2)}
+.dirs li.on{background:var(--c);border-color:var(--outline);color:var(--on-dir);transform:translateY(-3px) scale(1.04)}
+.dirs li.on .pct{color:var(--on-dir)}
+.dirs li.on .num{background:var(--on-dir);color:var(--c)}
+
+/* Gombok */
+.actions,.batch{display:flex;flex-wrap:wrap;gap:8px}
+.btn{font:inherit;font-weight:800;border:0;border-radius:14px;min-height:52px;padding:0 16px;cursor:pointer;touch-action:manipulation;color:var(--ink)}
+.btn:focus-visible,.chip-btn:focus-visible,summary:focus-visible,.check input:focus-visible{outline:3px solid var(--c-left);outline-offset:2px}
+.btn:disabled,.chip-btn:disabled{opacity:.5;cursor:default}
+.btn-main{flex:2 1 170px;background:var(--btn-bg);color:var(--btn-fg);font:600 20px var(--display)}
+.btn-main:not(:disabled):active{transform:translateY(1px)}
+.btn-sec{flex:1 1 120px;background:var(--surface-2);border:2px solid var(--line)}
+.batch-label{flex:1 0 100%;margin:0;font:500 12px var(--mono);color:var(--ink-2);letter-spacing:.04em;text-transform:uppercase}
+.chip-btn{flex:1 1 90px;min-height:44px;font:inherit;font-weight:800;font-size:14px;background:var(--surface-2);color:var(--ink);border:2px solid var(--line);border-radius:999px;padding:0 12px;cursor:pointer;touch-action:manipulation}
+
+/* Programozási kapcsolat */
+.vars{margin:0;font:500 14px var(--mono);display:flex;flex-wrap:wrap;gap:4px 16px}
+.vars b{font-weight:700}
+.conds{display:flex;flex-wrap:wrap;gap:6px}
+.cond{font:500 12px var(--mono);padding:4px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2)}
+.cond b{font-weight:700}
+.cond.t b{color:var(--ok)}
+.cond.f b{color:var(--fall)}
+.cond.main{border-color:var(--ink-2)}
+.hint{margin:0;font-size:13px;color:var(--ink-2)}
+
+/* Eredmények */
+.big{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px}
+.big .v{font:700 clamp(44px,12vw,62px)/1 var(--display);font-variant-numeric:tabular-nums}
+.big .l{font:500 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+.frac{margin:6px 0 12px;font:500 13px var(--mono);color:var(--ink-2);overflow-wrap:anywhere}
+.split{display:flex;height:12px;border-radius:999px;overflow:hidden;background:var(--line);margin-bottom:14px}
+.split i{display:block;height:100%;transition:width .3s}
+.split .f{background:var(--c-down)}
+.split .s{background:var(--c-right)}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0}
+.tiles div{background:var(--surface-2);border-radius:12px;padding:10px 12px;min-width:0}
+.tiles dt{font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+.tiles dd{margin:2px 0 0;font:600 26px/1.1 var(--display);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.tiles .tf dd{color:var(--fall)}
+.tiles .ts dd{color:var(--ok)}
+
+.chart svg{display:block;width:100%;height:auto}
+.chart .gl{stroke:var(--line);stroke-width:1}
+.chart .tx{font:500 10px var(--mono);fill:var(--ink-2)}
+.chart .ln{fill:none;stroke:var(--chart);stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round}
+.chart .dot{fill:var(--chart);stroke:var(--surface);stroke-width:2}
+.chart .th{stroke:var(--fall);stroke-width:1.6;stroke-dasharray:5 4}
+.chart .thx{font:700 10px var(--mono);fill:var(--fall)}
+.chart .val{font:700 11px var(--mono);fill:var(--chart)}
+.chart figcaption{margin-top:4px;font-size:13px;color:var(--ink-2)}
+.check{display:flex;align-items:center;gap:10px;margin-top:10px;font-weight:600;font-size:14px;min-height:36px}
+.check input{width:20px;height:20px;accent-color:var(--chart)}
+
+.recent{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.recent li{font:700 13px var(--mono);padding:5px 10px;border-radius:999px}
+.recent li.f{background:var(--fall-bg);color:var(--fall)}
+.recent li.s{background:var(--ok-bg);color:var(--ok)}
+.recent li.empty{background:var(--surface-2);color:var(--ink-2);font-weight:500}
+
+details.theory summary{cursor:pointer;font:600 18px var(--display);padding:4px 0;min-height:36px}
+details.theory .body{display:grid;gap:8px;margin-top:8px;font-size:15px}
+details.theory p{margin:0}
+.formula{font:500 14px var(--mono);background:var(--surface-2);border-radius:10px;padding:8px 10px;overflow-wrap:anywhere}
+
+.reset{justify-self:start;font:inherit;font-weight:700;font-size:14px;background:none;border:2px solid var(--line);color:var(--ink-2);border-radius:999px;min-height:40px;padding:0 14px;cursor:pointer}
+.reset.arm{border-color:var(--fall);color:var(--fall)}
+
+/* Fülek */
+.tabs{display:flex;gap:6px;width:100%;max-width:520px;padding:5px;background:var(--surface);border:1px solid var(--line);border-radius:16px}
+.tabs a{flex:1 1 0;display:flex;align-items:center;justify-content:center;min-height:46px;padding:0 10px;border-radius:12px;color:var(--ink);text-decoration:none;font:600 17px var(--display);text-align:center}
+.tabs a[aria-current="page"]{background:var(--btn-bg);color:var(--btn-fg)}
+.tabs a:focus-visible,a.btn:focus-visible{outline:3px solid var(--c-left);outline-offset:2px}
+a.btn{display:flex;align-items:center;justify-content:center;text-decoration:none}
+
+/* Számold ki! */
+.slots,.pad{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.slot{height:56px;display:grid;place-items:center;border-radius:12px;border:2px dashed var(--line);background:var(--surface-2);font:700 28px/1 var(--mono);color:var(--ink-2)}
+.slot.set{border:2px solid var(--outline);background:var(--c);color:var(--on-dir)}
+.dirbtn{display:grid;justify-items:center;gap:2px;min-height:62px;padding:8px 2px;font:800 13px var(--body);background:var(--c);color:var(--on-dir);border:2px solid var(--outline);border-radius:14px;cursor:pointer;touch-action:manipulation}
+.dirbtn svg{width:26px;height:26px;display:block}
+.dirbtn:active{transform:translateY(1px)}
+.dirbtn:focus-visible{outline:3px solid var(--c-left);outline-offset:2px}
+.grp{display:grid;gap:8px;margin-top:12px}
+.grp h3{margin:0;font:600 16px var(--display);display:flex;align-items:center;gap:8px}
+.cnt{font:700 13px var(--mono);background:var(--surface-2);border-radius:999px;padding:2px 10px}
+.paths{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.paths li{font:700 14px var(--mono);letter-spacing:.14em;padding:5px 9px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line)}
+.paths li.new{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.qs{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.q{display:grid;gap:8px;padding:12px;background:var(--surface-2);border:2px solid var(--line);border-radius:14px}
+.q.locked{opacity:.5}
+.q.done{background:var(--ok-bg);border-color:transparent}
+.qh{display:flex;gap:10px;align-items:flex-start}
+.qn{flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:var(--btn-bg);color:var(--btn-fg);font:700 13px/26px var(--mono);text-align:center}
+.qh label{font-weight:800;font-size:15px}
+.q .row{display:flex;flex-wrap:wrap;gap:8px}
+.q input{flex:1 1 130px;min-width:0;min-height:48px;font:600 18px var(--mono);color:var(--ink);background:var(--surface);border:2px solid var(--line);border-radius:12px;padding:0 12px}
+.q input:focus-visible{outline:3px solid var(--c-left);outline-offset:1px}
+.q .btn-main{flex:0 0 auto;min-height:48px;font-size:17px}
+.fb{margin:0;font-size:14px;font-weight:700}
+.fb.good{color:var(--ok)}
+.fb.bad{color:var(--fall)}
+.fb.tip{color:var(--ink-2)}
+.reveal{justify-self:start;font:inherit;font-weight:700;font-size:13px;background:none;border:2px solid var(--line);color:var(--ink-2);border-radius:999px;min-height:38px;padding:0 12px;cursor:pointer}
+.reveal.arm{border-color:var(--fall);color:var(--fall)}
+.reveal:focus-visible{outline:3px solid var(--c-left);outline-offset:2px}
+.cmp{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0 0 10px}
+.cmp div{background:var(--surface-2);border-radius:12px;padding:10px 12px;min-width:0}
+.cmp dt{font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+.cmp dd{margin:2px 0 0;font:600 26px/1.1 var(--display);font-variant-numeric:tabular-nums}
+pre.code{margin:0;padding:10px 12px;background:var(--surface-2);border-radius:10px;overflow-x:auto;font:500 12px/1.5 var(--mono)}
+.solve{display:grid;gap:10px}
+
+@media (prefers-reduced-motion:reduce){
+  .robot,.dirs li,.split i{transition:none}
+  .fell .rp{animation:none}
+  .fell .rp1{opacity:.7;transform:scale(1.6)}
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Informatika · Valószínűségszámítás</p>
+    <h1>Mátrix Sétálója</h1>
+    <p class="lead">A robot egy 5×5-ös sziget közepén, a (3, 3) mezőn áll. Minden lépésnél 25-25% eséllyel megy fel, le, jobbra vagy balra. Lemegy-e a vízbe 4 lépésen belül?</p>
+  </header>
+
+  <nav class="tabs" aria-label="Fülek">
+    <a href="#szimulacio" id="tabSim" aria-current="page">Szimuláció</a>
+    <a href="#szamold-ki" id="tabCalc">Számold ki!</a>
+  </nav>
+
+  <div id="viewSim">
+  <div class="layout">
+    <div class="col">
+      <section class="card play" aria-label="Játék">
+        <div class="board" id="board">
+          <svg id="svg" viewBox="0 0 70 70" role="img" aria-label="Az 5×5-ös sziget és a körülötte lévő víz">
+            <g id="stat"></g>
+            <g id="trail"></g>
+            <g id="ripple"><circle class="rp rp1" r="3"/><circle class="rp rp2" r="3"/></g>
+            <g id="robot" class="robot">
+              <g class="rbody">
+                <line x1="0" y1="-3.2" x2="0" y2="-4.5" stroke="var(--outline)" stroke-width=".55" stroke-linecap="round"/>
+                <circle cx="0" cy="-4.9" r=".95" fill="var(--c-down)" stroke="var(--outline)" stroke-width=".4"/>
+                <rect x="-3.3" y="-3.2" width="6.6" height="6.2" rx="1.7" fill="var(--robot)" stroke="var(--outline)" stroke-width=".6"/>
+                <g class="eyes-ok">
+                  <circle cx="-1.2" cy="-.7" r=".75" fill="var(--outline)"/>
+                  <circle cx="1.2" cy="-.7" r=".75" fill="var(--outline)"/>
+                  <path d="M-1.4 1.1 Q0 2.4 1.4 1.1" fill="none" stroke="var(--outline)" stroke-width=".5" stroke-linecap="round"/>
+                </g>
+                <g class="eyes-x" fill="none" stroke="var(--outline)" stroke-width=".55" stroke-linecap="round">
+                  <path d="M-1.9 -1.3l1.4 1.4M-.5 -1.3l-1.4 1.4"/>
+                  <path d="M.5 -1.3l1.4 1.4M1.9 -1.3l-1.4 1.4"/>
+                  <path d="M-1.3 1.7h2.6"/>
+                </g>
+              </g>
+            </g>
+          </svg>
+        </div>
+
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+
+        <ol class="dirs" id="dirs" aria-label="Az irányok és az esélyük"></ol>
+
+        <div class="actions">
+          <button class="btn btn-main" id="btnMain" type="button">Dobj és lépj</button>
+          <button class="btn btn-sec" id="btnAuto" type="button">Egész futás</button>
+        </div>
+
+        <div class="batch">
+          <p class="batch-label">Gép dobál helyetted</p>
+          <button class="chip-btn" type="button" data-n="10">+10 futás</button>
+          <button class="chip-btn" type="button" data-n="1000">+1 000 futás</button>
+          <button class="chip-btn" type="button" data-n="100000">+100 000 futás</button>
+        </div>
+      </section>
+
+      <section class="card" aria-label="A program változói">
+        <h2>Így látja a program</h2>
+        <p class="vars" id="vars"></p>
+        <div class="conds" id="conds" style="margin-top:10px"></div>
+        <p class="hint" style="margin-top:10px">A ciklus addig fut, amíg a fenti feltétel igaz. Leesésnél az x vagy az y kilép az 1–5 tartományból.</p>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="card" aria-label="Eredmény">
+        <h2>Eredmény</h2>
+        <div class="big"><span class="v" id="relBig">–</span><span class="l">relatív gyakoriság</span></div>
+        <p class="frac" id="frac">Még nincs lefutott kísérlet.</p>
+        <div class="split" aria-hidden="true"><i class="f" id="barF" style="width:0"></i><i class="s" id="barS" style="width:0"></i></div>
+        <dl class="tiles">
+          <div><dt>Futások</dt><dd id="tRuns">0</dd></div>
+          <div class="tf"><dt>Leesett</dt><dd id="tFell">0</dd></div>
+          <div class="ts"><dt>Túlélt</dt><dd id="tSurv">0</dd></div>
+        </dl>
+      </section>
+
+      <section class="card" aria-label="Utolsó futások">
+        <h2>Utolsó futások</h2>
+        <ul class="recent" id="recent"></ul>
+        <p class="hint">✕ a szám a lépés, amelyben leesett. ✓ a robot mind a 4 lépést túlélte.</p>
+      </section>
+
+      <section class="card chart" aria-label="Grafikon">
+        <h2>Hogyan áll be az érték?</h2>
+        <figure style="margin:0">
+          <svg id="chart" viewBox="0 0 360 214" role="img" aria-label="A relatív gyakoriság a futások számának függvényében"></svg>
+          <figcaption>Vízszintesen a futások száma (logaritmikus skála), függőlegesen a leesések aránya.</figcaption>
+        </figure>
+        <label class="check" for="theoryToggle"><input type="checkbox" id="theoryToggle" disabled> <span id="theoryLabel">Elméleti érték (a „Számold ki!” fülön oldod fel)</span></label>
+      </section>
+
+      <button class="reset" id="reset" type="button">Statisztika nullázása</button>
+    </div>
+  </div>
+  </div>
+
+  <div id="viewCalc" hidden>
+    <div class="layout">
+      <div class="col">
+        <section class="card play" aria-label="Útkereső">
+          <h2 style="margin:0">Útkereső</h2>
+          <p class="hint" style="font-size:14px">A robot 4 lépést tesz, és minden lépés egyforma eséllyel Fel, Le, Jobbra vagy Balra. Rakd össze a 4 lépést. Ha az út leesésbe vezet, bekerül a listába. Ha a robot már a 3. lépésben leesik, a 4. lépést akkor is add meg: az külön útnak számít.</p>
+          <div class="board">
+            <svg id="svg2" viewBox="0 0 70 70" role="img" aria-label="Az összerakott út a szigeten">
+              <g id="stat2"></g>
+              <g id="trail2"></g>
+              <g id="end2"></g>
+            </svg>
+          </div>
+          <div class="slots" id="slots"></div>
+          <div class="status" id="verdict" role="status" aria-live="polite"></div>
+          <div class="pad" id="pad"></div>
+          <div class="actions">
+            <button class="btn btn-sec" id="btnUndo" type="button">Visszavon</button>
+            <button class="btn btn-sec" id="btnClear" type="button">Új út</button>
+          </div>
+          <p class="hint">Ha már van 4 lépés, a következő nyíl új utat kezd.</p>
+        </section>
+
+        <section class="card" aria-label="Megtalált utak">
+          <h2>Megtalált utak</h2>
+          <p class="frac" id="foundCount" style="margin:0"></p>
+          <div id="foundList"></div>
+          <div style="margin-top:12px"><button class="reveal" id="btnShowAll" type="button">Elakadtál? Mutasd az összes kedvező utat</button></div>
+        </section>
+      </div>
+
+      <div class="col">
+        <section class="card" aria-label="Kérdések">
+          <h2>Számold ki!</h2>
+          <p class="hint" style="margin:0 0 10px;font-size:14px">Mekkora az esélye, hogy a robot 4 lépésből leesik? Oldd meg lépésenként. A következő kérdés akkor nyílik meg, ha az előzőt megoldottad.</p>
+          <ol class="qs" id="qs"></ol>
+        </section>
+
+        <section class="card solve" id="solveCard" hidden aria-label="Megoldás és összevetés">
+          <h2 style="margin:0">Megoldás és összevetés</h2>
+          <dl class="cmp">
+            <div><dt>Elmélet</dt><dd id="cmpTheory">–</dd></div>
+            <div><dt>Kísérlet</dt><dd id="cmpExp">–</dd></div>
+          </dl>
+          <p class="hint" id="cmpNote" style="margin:0"></p>
+          <p class="formula" style="margin:0">P = (16 + 24) / 256 = 40 / 256 = 5 / 32 = 0,15625 = 15,625%</p>
+          <a class="btn btn-main" href="#szimulacio">Vissza a szimulációhoz</a>
+          <details class="theory">
+            <summary>Bónusz: ugyanez programmal</summary>
+            <div class="body">
+              <p>Négy egymásba ágyazott ciklus végigmegy mind a 256 úton, és megszámolja a leeséseket.</p>
+              <pre class="code">int kedvezo = 0;
+for (int a = 1; a &lt;= 4; a++)
+ for (int b = 1; b &lt;= 4; b++)
+  for (int c = 1; c &lt;= 4; c++)
+   for (int d = 1; d &lt;= 4; d++)
+   {
+     int[] lepesek = { a, b, c, d };
+     int x = 3, y = 3, n = 0;
+     while (x &gt; 0 &amp;&amp; x &lt; 6 &amp;&amp; y &gt; 0 &amp;&amp; y &lt; 6 &amp;&amp; n &lt; 4)
+     {
+       int irany = lepesek[n];
+       if (irany == 1) y++;
+       else if (irany == 2) y--;
+       else if (irany == 3) x++;
+       else x--;
+       n++;
+     }
+     if (x &lt; 1 || x &gt; 5 || y &lt; 1 || y &gt; 5) kedvezo++;
+   }
+Console.WriteLine($"{kedvezo} / 256");</pre>
+            </div>
+          </details>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var DIRS = {
+    1:{n:'Fel',   dx:0, dy:1,  c:'up',    rot:0},
+    2:{n:'Le',    dx:0, dy:-1, c:'down',  rot:180},
+    3:{n:'Jobbra',dx:1, dy:0,  c:'right', rot:90},
+    4:{n:'Balra', dx:-1,dy:0,  c:'left',  rot:270}
+  };
+  var MAXSTEPS = 4;
+  var THEORY = 40/256*100;
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function $(id){return document.getElementById(id);}
+  function inside(x,y){return x>0 && x<6 && y>0 && y<6;}
+  function rollDir(){return Math.floor(Math.random()*4)+1;}      // 1..4, mint a C# Random.Next(1, 5)
+  function sleep(ms){return new Promise(function(r){setTimeout(r, reduced ? Math.min(ms,60) : ms);});}
+  function fmtInt(n){return Number(n).toLocaleString('hu-HU');}
+  function fmtPct(p, d){return p.toFixed(d).replace('.',',')+'%';}
+
+  function simulate(){
+    var x=3,y=3,s=0;
+    while(inside(x,y) && s<MAXSTEPS){
+      var d=DIRS[rollDir()]; x+=d.dx; y+=d.dy; s++;
+    }
+    return {fell:!inside(x,y), steps:s};
+  }
+
+  var stats = {runs:0, falls:0, hist:[], recent:[], lastRec:0};
+  var run = freshRun();
+  var busy = false, note = null, showTheory = false, resetArmed = null;
+
+  function freshRun(){return {x:3,y:3,steps:0,path:[],over:false,fell:false};}
+
+  /* ---------- statisztika ---------- */
+  function record(force){
+    var n=stats.runs;
+    if(n<1) return;
+    var last=stats.hist[stats.hist.length-1];
+    if(last && last.n===n) return;
+    if(force || n<200 || n>=stats.lastRec*1.03){
+      stats.hist.push({n:n, p:stats.falls/n*100});
+      stats.lastRec=n;
+    }
+  }
+  function addResult(res){
+    stats.runs++;
+    if(res.fell) stats.falls++;
+    stats.recent.unshift(res);
+    if(stats.recent.length>12) stats.recent.pop();
+    record(false);
+  }
+
+  /* ---------- sziget (statikus réteg) ---------- */
+  function cx(x){return x*10+5;}
+  function cy(y){return (6-y)*10+5;}
+
+  function buildStatic(target,clipId){
+    var s='<rect width="70" height="70" fill="var(--sea)"/>';
+    var i,gx,gy;
+    for(i=0;i<=7;i++){
+      s+='<line x1="'+i*10+'" y1="0" x2="'+i*10+'" y2="70" stroke="var(--sea-line)" stroke-width=".35"/>';
+      s+='<line x1="0" y1="'+i*10+'" x2="70" y2="'+i*10+'" stroke="var(--sea-line)" stroke-width=".35"/>';
+    }
+    s+='<clipPath id="'+clipId+'"><rect x="10" y="10" width="50" height="50" rx="3"/></clipPath>';
+    s+='<rect x="10" y="10" width="50" height="50" rx="3" fill="var(--sand)"/>';
+    s+='<g clip-path="url(#'+clipId+')">';
+    for(gx=1;gx<=5;gx++){for(gy=1;gy<=5;gy++){
+      if((gx+gy)%2===0) s+='<rect x="'+gx*10+'" y="'+(6-gy)*10+'" width="10" height="10" fill="var(--sand-2)"/>';
+    }}
+    for(i=2;i<=5;i++){
+      s+='<line x1="'+i*10+'" y1="10" x2="'+i*10+'" y2="60" stroke="var(--grid)" stroke-width=".35"/>';
+      s+='<line x1="10" y1="'+i*10+'" x2="60" y2="'+i*10+'" stroke="var(--grid)" stroke-width=".35"/>';
+    }
+    s+='</g>';
+    s+='<rect x="10" y="10" width="50" height="50" rx="3" fill="none" stroke="var(--shore)" stroke-width="1.1"/>';
+    for(i=1;i<=5;i++){
+      s+='<text x="'+cx(i)+'" y="'+cy(0)+'" text-anchor="middle" dy=".35em" font-family="var(--mono)" font-size="3.4" font-weight="700" fill="var(--ink)">'+i+'</text>';
+      s+='<text x="'+cx(0)+'" y="'+cy(i)+'" text-anchor="middle" dy=".35em" font-family="var(--mono)" font-size="3.4" font-weight="700" fill="var(--ink)">'+i+'</text>';
+    }
+    s+='<text x="'+cx(6)+'" y="'+cy(0)+'" text-anchor="middle" dy=".35em" font-family="var(--mono)" font-size="3.4" font-weight="700" fill="var(--ink)">x</text>';
+    s+='<text x="'+cx(0)+'" y="'+cy(6)+'" text-anchor="middle" dy=".35em" font-family="var(--mono)" font-size="3.4" font-weight="700" fill="var(--ink)">y</text>';
+    s+='<text x="'+cx(3)+'" y="'+cy(3)+'" text-anchor="middle" dy=".35em" font-family="var(--mono)" font-size="2.3" font-weight="700" fill="var(--outline)" opacity=".55">START</text>';
+    $(target).innerHTML=s;
+  }
+
+  function trailSVG(path){
+    var pts=[{x:3,y:3}].concat(path);
+    var lines='',dots='',seen={'3,3':1},i;
+    for(i=1;i<pts.length;i++){
+      var a=pts[i-1],b=pts[i],col='var(--c-'+DIRS[b.d].c+')';
+      lines+='<line x1="'+cx(a.x)+'" y1="'+cy(a.y)+'" x2="'+cx(b.x)+'" y2="'+cy(b.y)+'" stroke="var(--outline)" stroke-width="3.4" stroke-linecap="round" opacity=".55"/>';
+      lines+='<line x1="'+cx(a.x)+'" y1="'+cy(a.y)+'" x2="'+cx(b.x)+'" y2="'+cy(b.y)+'" stroke="'+col+'" stroke-width="2" stroke-linecap="round"/>';
+    }
+    for(i=1;i<pts.length;i++){
+      var p=pts[i],key=p.x+','+p.y,n=seen[key]||0;
+      seen[key]=n+1;
+      var ox=n?Math.cos(n*2.4)*2.6:0, oy=n?Math.sin(n*2.4)*2.6:0;
+      dots+='<circle cx="'+(cx(p.x)+ox)+'" cy="'+(cy(p.y)+oy)+'" r="2.1" fill="var(--c-'+DIRS[p.d].c+')" stroke="var(--outline)" stroke-width=".5"/>';
+      dots+='<text x="'+(cx(p.x)+ox)+'" y="'+(cy(p.y)+oy)+'" text-anchor="middle" dy=".35em" font-family="var(--mono)" font-size="2.6" font-weight="700" fill="var(--on-dir)">'+i+'</text>';
+    }
+    return lines+dots;
+  }
+
+  /* ---------- megjelenítés ---------- */
+  function renderBoard(){
+    $('trail').innerHTML=trailSVG(run.path);
+    var t='translate('+cx(run.x)+'px,'+cy(run.y)+'px)';
+    $('robot').style.transform=t;
+    $('ripple').style.transform=t;
+    $('svg').classList.toggle('fell', run.fell);
+  }
+
+  function renderStatus(){
+    var el=$('status'), cls='status', txt;
+    if(run.over && run.fell){
+      cls+=' fell'; txt='Leesett a '+run.steps+'. lépésben. A robot a vízben van.';
+    } else if(run.over){
+      cls+=' ok'; txt='Túlélte mind a 4 lépést. A robot a szigeten maradt.';
+    } else if(run.steps>0){
+      var last=run.path[run.path.length-1];
+      txt=run.steps+'. lépés: '+DIRS[last.d].n+'. Még '+(MAXSTEPS-run.steps)+' lépés van hátra.';
+    } else if(note){
+      txt=note;
+    } else {
+      txt='A robot a (3, 3) mezőn áll. Dobj és lépj!';
+    }
+    el.className=cls; el.textContent=txt;
+  }
+
+  function renderConds(){
+    var xo=run.x>0&&run.x<6, yo=run.y>0&&run.y<6, so=run.steps<MAXSTEPS, all=xo&&yo&&so;
+    function pill(label,v,extra){
+      return '<span class="cond '+(v?'t':'f')+(extra||'')+'">'+label+' <b>'+(v?'igaz':'hamis')+'</b></span>';
+    }
+    $('vars').innerHTML='<span>x = <b>'+run.x+'</b></span><span>y = <b>'+run.y+'</b></span><span>lépések = <b>'+run.steps+'</b></span>';
+    $('conds').innerHTML=pill('0 &lt; x &lt; 6',xo)+pill('0 &lt; y &lt; 6',yo)+pill('lépések &lt; 4',so)+pill('while',all,' main');
+  }
+
+  function renderButtons(){
+    $('btnMain').textContent = run.over ? 'Új futás' : 'Dobj és lépj';
+    var dis=busy;
+    $('btnMain').disabled=dis; $('btnAuto').disabled=dis;
+    var b=document.querySelectorAll('.chip-btn');
+    for(var i=0;i<b.length;i++) b[i].disabled=dis;
+  }
+
+  function renderStats(){
+    var n=stats.runs, f=stats.falls, s=n-f;
+    if(n===0){
+      $('relBig').textContent='–';
+      $('frac').textContent='Még nincs lefutott kísérlet.';
+      $('barF').style.width='0'; $('barS').style.width='0';
+    } else {
+      var r=f/n;
+      $('relBig').textContent=fmtPct(r*100,2);
+      $('frac').textContent='leesett / futások = '+fmtInt(f)+' / '+fmtInt(n)+' = '+r.toFixed(4).replace('.',',');
+      $('barF').style.width=(r*100)+'%'; $('barS').style.width=((1-r)*100)+'%';
+    }
+    $('tRuns').textContent=fmtInt(n); $('tFell').textContent=fmtInt(f); $('tSurv').textContent=fmtInt(s);
+  }
+
+  function renderRecent(){
+    var el=$('recent');
+    if(!stats.recent.length){el.innerHTML='<li class="empty">Még nem volt futás.</li>';return;}
+    el.innerHTML=stats.recent.map(function(r){
+      return r.fell
+        ? '<li class="f" aria-label="Leesett a '+r.steps+'. lépésben"><span aria-hidden="true">✕</span> '+r.steps+'</li>'
+        : '<li class="s" aria-label="Túlélte"><span aria-hidden="true">✓</span> '+r.steps+'</li>';
+    }).join('');
+  }
+
+  function renderChart(){
+    var W=360,H=214,L=42,R=14,T=14,B=32,pw=W-L-R,ph=H-T-B;
+    var maxExp=Math.max(3,Math.ceil(Math.log10(Math.max(stats.runs,1))));
+    function X(n){return L+(Math.log10(n)-1)/(maxExp-1)*pw;}
+    function Y(p){return T+ph-(Math.min(p,50)/50)*ph;}
+    var s='',v,e;
+    for(v=0;v<=50;v+=10){
+      s+='<line class="gl" x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'"/>';
+      s+='<text class="tx" x="'+(L-6)+'" y="'+Y(v)+'" text-anchor="end" dy=".35em">'+v+'%</text>';
+    }
+    for(e=1;e<=maxExp;e++){
+      var gx=X(Math.pow(10,e));
+      s+='<line class="gl" x1="'+gx+'" x2="'+gx+'" y1="'+T+'" y2="'+(T+ph)+'"/>';
+      s+='<text class="tx" x="'+gx+'" y="'+(H-B+16)+'" text-anchor="middle">'+fmtInt(Math.pow(10,e))+'</text>';
+    }
+    var pts=stats.hist.filter(function(h){return h.n>=10;});
+    if(showTheory){
+      var ty=Y(THEORY);
+      s+='<line class="th" x1="'+L+'" x2="'+(W-R)+'" y1="'+ty+'" y2="'+ty+'"/>';
+      s+='<text class="thx" x="'+(L+4)+'" y="'+(ty-5)+'">elmélet: '+fmtPct(THEORY,3)+'</text>';
+    }
+    if(pts.length>=2){
+      var d=pts.map(function(h,i){return (i?'L':'M')+X(h.n).toFixed(1)+' '+Y(h.p).toFixed(1);}).join(' ');
+      s+='<path class="ln" d="'+d+'"/>';
+      var lp=pts[pts.length-1], lx=X(lp.n), ly=Y(lp.p);
+      s+='<circle class="dot" cx="'+lx+'" cy="'+ly+'" r="4.5"/>';
+      s+='<text class="val" x="'+Math.min(lx-8,W-R-4)+'" y="'+Math.max(ly-9,T+8)+'" text-anchor="end">'+fmtPct(lp.p,1)+'</text>';
+    } else {
+      s+='<text class="tx" x="'+(L+pw/2)+'" y="'+(T+ph/2)+'" text-anchor="middle">A grafikon 10 futás után indul.</text>';
+    }
+    $('chart').innerHTML=s;
+  }
+
+  function render(){
+    renderBoard(); renderStatus(); renderConds(); renderButtons();
+    renderStats(); renderRecent(); renderChart();
+  }
+
+  /* ---------- dobás ---------- */
+  function buildDirs(){
+    var h='';
+    [1,2,3,4].forEach(function(k){
+      var d=DIRS[k];
+      h+='<li data-d="'+k+'" style="--c:var(--c-'+d.c+')"><span class="num">'+k+'</span>'
+        +'<svg class="arr" viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate('+d.rot+'deg)"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        +'<span class="name">'+d.n+'</span><span class="pct">25%</span></li>';
+    });
+    $('dirs').innerHTML=h;
+  }
+  function flash(d){
+    var li=$('dirs').children;
+    for(var i=0;i<li.length;i++) li[i].classList.toggle('on', +li[i].getAttribute('data-d')===d);
+  }
+  async function roll(){
+    var d=rollDir();
+    if(!reduced){for(var i=0;i<6;i++){flash(rollDir()); await sleep(55);}}
+    flash(d);
+    return d;
+  }
+
+  /* ---------- futás ---------- */
+  function move(d){
+    var v=DIRS[d];
+    run.x+=v.dx; run.y+=v.dy; run.steps++;
+    run.path.push({x:run.x,y:run.y,d:d});
+    if(!inside(run.x,run.y)){run.over=true; run.fell=true;}
+    else if(run.steps>=MAXSTEPS){run.over=true; run.fell=false;}
+    if(run.over) addResult({fell:run.fell, steps:run.steps});
+    render();
+  }
+  async function doStep(){
+    var d=await roll();
+    move(d);
+  }
+  function newRun(){run=freshRun(); note=null; flash(0); render();}
+
+  async function onMain(){
+    if(busy) return;
+    if(run.over){newRun(); return;}
+    note=null; busy=true; renderButtons();
+    await doStep();
+    busy=false; renderButtons();
+  }
+  async function onAuto(){
+    if(busy) return;
+    if(run.over) newRun();
+    note=null; busy=true; renderButtons();
+    while(!run.over){
+      await doStep();
+      if(!run.over) await sleep(380);
+    }
+    busy=false; renderButtons();
+  }
+  function onBatch(n){
+    if(busy) return;
+    for(var i=0;i<n;i++) addResult(simulate());
+    record(true);
+    run=freshRun(); flash(0);
+    note=fmtInt(n)+' futás lefutott. Nézd meg az eredményt!';
+    render();
+  }
+  function onReset(){
+    var b=$('reset');
+    if(!resetArmed){
+      b.classList.add('arm'); b.textContent='Biztos? Nyomd meg még egyszer';
+      resetArmed=setTimeout(disarm,3000);
+      return;
+    }
+    disarm();
+    stats={runs:0,falls:0,hist:[],recent:[],lastRec:0};
+    run=freshRun(); note=null; flash(0); render();
+  }
+  function disarm(){
+    clearTimeout(resetArmed); resetArmed=null;
+    var b=$('reset'); b.classList.remove('arm'); b.textContent='Statisztika nullázása';
+  }
+
+  /* ---------- Számold ki! fül ---------- */
+  var ARR = {1:'↑', 2:'↓', 3:'→', 4:'←'};
+  var calc = {path:[], found:{}, last:'', msg:'', solved:{}, tries:{}, fb:{}};
+  var showArmed = null;
+
+  var QS = [
+    {id:1, t:'Hány különböző 4 lépéses út van?',
+     sub:'Egy út 4 lépés sorozata. Minden lépés Fel, Le, Jobbra vagy Balra.',
+     ans:256, show:'256', ph:'szám',
+     hints:['Hány irány közül választhatsz az 1. lépésnél? És a 2., a 3., a 4. lépésnél?',
+            'A lépések egymástól függetlenek, ezért a lehetőségek száma összeszorzódik.',
+            'Négyszer ugyanaz a szám szorzódik: 4 · 4 · 4 · 4 = ?'],
+     ok:'Minden lépésnél 4 irány közül választhatsz: 4 · 4 · 4 · 4 = 4⁴ = 256 út. Ez az összes eset.'},
+    {id:2, t:'Hány olyan út van, amelyben a robot már a 3. lépésben leesik?',
+     sub:'A 4. lépés ilyenkor is az út része.',
+     ans:16, show:'16', ph:'szám',
+     hints:['Hány lépést kell ugyanabba az irányba tenni, hogy a (3, 3) mezőről kilépj a rácsból?',
+            'Háromszor kell ugyanarra lépni. Hány ilyen irány van, és a 4. lépésre hány lehetőség marad?',
+            'Az irányok száma · a 4. lépés lehetőségei = ?'],
+     ok:'Háromszor ugyanabba az irányba kell lépni (4 irány), a 4. lépés bármi lehet (4 lehetőség): 4 · 4 = 16 út.'},
+    {id:3, t:'Hány olyan út van, amelyben a robot csak a 4. lépésben esik le?',
+     sub:'A 3. lépés után még a szigeten áll.',
+     ans:24, show:'24', ph:'szám',
+     hints:['Hol áll a robot a 3. lépés után, ha a következő lépéssel már leesik, de eddig nem esett le?',
+            'Ha például a part jobbra van: 3 lépésből 2 megy jobbra, 1 megy oldalra (fel vagy le). Hányféle sorrend és hányféle oldal lehet?',
+            '3 sorrend · 2 oldal = ? út egy irányra. A 4. lépés már kötött. Hány irány van?'],
+     ok:'Egy irányra 3 sorrend · 2 oldal = 6 út, a 4. lépés kijelölt. 4 irány · 6 = 24 út.'},
+    {id:4, t:'Hány kedvező út van összesen?',
+     sub:'Kedvező az az út, amelyben a robot leesik.',
+     ans:40, show:'40', ph:'szám',
+     hints:['Az út vagy a 3., vagy a 4. lépésben esik le, a kettő egyszerre nem lehet.',
+            'Add össze a 2. és a 3. kérdés válaszát.'],
+     ok:'A két eset kizárja egymást: 16 + 24 = 40 kedvező út.'},
+    {id:5, t:'Mekkora a leesés valószínűsége?',
+     sub:'Megadhatod törtként, tizedes törtként vagy százalékban.',
+     ans:0, show:'40/256', ph:'tört vagy %',
+     hints:['A valószínűség a kedvező esetek száma osztva az összes esettel.',
+            'Írd fel a törtet, majd számold ki tizedes törtként és százalékban is.',
+            'A tört mindkét tagja osztható 8-cal, így egyszerűsíthetsz.'],
+     ok:'P = 40 / 256 = 5 / 32 = 0,15625 = 15,625%.'}
+  ];
+
+  function arrowSVG(rot){
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate('+rot+'deg)"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
+
+  /* Egy út kiértékelése: az első kilépésig mozog, utána a további lépések nem módosítják a képet. */
+  function evalSeq(seq){
+    var x=3, y=3, p=[], fellAt=0;
+    for(var i=0;i<seq.length;i++){
+      if(fellAt) break;
+      var d=DIRS[seq[i]]; x+=d.dx; y+=d.dy;
+      p.push({x:x, y:y, d:seq[i]});
+      if(!inside(x,y)) fellAt=i+1;
+    }
+    return {fellAt:fellAt, path:p};
+  }
+
+  function calcAdd(d){
+    if(calc.path.length>=4){calc.path=[]; calc.msg='';}
+    calc.path.push(d);
+    if(calc.path.length===4){
+      var ev=evalSeq(calc.path);
+      if(ev.fellAt){
+        var k=calc.path.join('');
+        if(calc.found[k]){calc.msg='dup';}
+        else {calc.found[k]=ev.fellAt; calc.msg='new'; calc.last=k;}
+      } else {calc.msg='';}
+    }
+    renderCalc();
+  }
+
+  function renderBuilder(){
+    var ev=evalSeq(calc.path), n=calc.path.length, i;
+    $('trail2').innerHTML=trailSVG(ev.path);
+    var last=ev.path.length?ev.path[ev.path.length-1]:{x:3,y:3};
+    var m='<circle cx="'+cx(last.x)+'" cy="'+cy(last.y)+'" r="3" fill="var(--robot)" stroke="var(--outline)" stroke-width=".6"/>';
+    if(ev.fellAt){
+      m+='<path d="M'+(cx(last.x)-1.3)+' '+(cy(last.y)-1.3)+'l2.6 2.6M'+(cx(last.x)+1.3)+' '+(cy(last.y)-1.3)+'l-2.6 2.6" fill="none" stroke="var(--outline)" stroke-width=".7" stroke-linecap="round"/>';
+    }
+    $('end2').innerHTML=m;
+
+    var h='';
+    for(i=0;i<4;i++){
+      var d=calc.path[i];
+      h+= d
+        ? '<div class="slot set" style="--c:var(--c-'+DIRS[d].c+')" role="img" aria-label="'+(i+1)+'. lépés: '+DIRS[d].n+'">'+ARR[d]+'</div>'
+        : '<div class="slot" role="img" aria-label="'+(i+1)+'. lépés: üres">'+(i+1)+'</div>';
+    }
+    $('slots').innerHTML=h;
+
+    var cls='status', t;
+    if(n===0){t='Válaszd ki az 1. lépést.';}
+    else if(n<4 && ev.fellAt){cls+=' fell'; t='A robot a '+ev.fellAt+'. lépésben leesett. A '+(n+1)+'. lépést is válaszd ki.';}
+    else if(n<4){t='Válaszd ki a '+(n+1)+'. lépést.';}
+    else if(ev.fellAt){
+      cls+=' fell';
+      t='Leesik a '+ev.fellAt+'. lépésben. '+(calc.msg==='new'?'Új kedvező út, felkerült a listára!':'Ezt az utat már megtaláltad.');
+    } else {cls+=' ok'; t='Túléli, ezért ez az út nem kedvező.';}
+    $('verdict').className=cls; $('verdict').textContent=t;
+  }
+
+  function renderFound(){
+    var keys=Object.keys(calc.found).sort(), g3=[], g4=[];
+    keys.forEach(function(k){(calc.found[k]===3?g3:g4).push(k);});
+    function chip(k){
+      return '<li class="'+(k===calc.last?'new':'')+'" aria-label="'+k.split('').map(function(c){return DIRS[c].n;}).join(', ')+'">'+k.split('').map(function(c){return ARR[c];}).join(' ')+'</li>';
+    }
+    function grp(title,arr){
+      return '<div class="grp"><h3>'+title+' <span class="cnt">'+arr.length+'</span></h3>'
+        +(arr.length?'<ul class="paths">'+arr.map(chip).join('')+'</ul>':'<p class="hint" style="margin:0">Még nincs ilyen út.</p>')+'</div>';
+    }
+    $('foundCount').textContent='Megtalált kedvező utak: '+g3.length+' + '+g4.length+' = '+keys.length;
+    $('foundList').innerHTML=grp('A 3. lépésben leesik',g3)+grp('A 4. lépésben leesik',g4);
+  }
+
+  /* ---------- kérdések ---------- */
+  function buildQs(){
+    var h='';
+    QS.forEach(function(q){
+      h+='<li class="q" id="q'+q.id+'">'
+        +'<div class="qh"><span class="qn">'+q.id+'</span><label for="qi'+q.id+'">'+q.t+'</label></div>'
+        +(q.sub?'<p class="hint" style="margin:0">'+q.sub+'</p>':'')
+        +'<div class="row"><input id="qi'+q.id+'" type="text" inputmode="'+(q.id<5?'numeric':'text')+'" autocomplete="off" placeholder="'+q.ph+'">'
+        +'<button type="button" class="btn btn-main" data-check="'+q.id+'">Ellenőriz</button></div>'
+        +'<p class="fb" id="fb'+q.id+'" aria-live="polite"></p>'
+        +'<button type="button" class="reveal" id="rv'+q.id+'" data-reveal="'+q.id+'" hidden>Mutasd a választ</button></li>';
+    });
+    $('qs').innerHTML=h;
+  }
+
+  function updateQs(){
+    QS.forEach(function(q){
+      var id=q.id, locked=id>1 && !calc.solved[id-1], done=!!calc.solved[id];
+      $('q'+id).className='q'+(locked?' locked':'')+(done?' done':'');
+      $('qi'+id).disabled=locked||done;
+      $('q'+id).querySelector('[data-check]').disabled=locked||done;
+      var fb=calc.fb[id], el=$('fb'+id);
+      el.textContent=(fb && !locked)?fb.t:'';
+      el.className='fb'+((fb && !locked)?' '+fb.c:'');
+      $('rv'+id).hidden=!((calc.tries[id]||0)>=3 && !done && !locked);
+    });
+  }
+
+  function parseProb(raw){
+    var s=raw.toLowerCase().replace(/\s/g,'').replace(/,/g,'.');
+    var pct=s.indexOf('%')>=0;
+    s=s.replace('%','');
+    if(s.indexOf('/')>0){
+      var p=s.split('/'), a=parseFloat(p[0]), b=parseFloat(p[1]);
+      if(isNaN(a) || !(b>0)) return null;
+      return a/b*100;
+    }
+    var v=parseFloat(s);
+    if(isNaN(v)) return null;
+    return (pct || v>1) ? v : v*100;
+  }
+
+  function checkQ(i){
+    var q=QS[i-1], raw=$('qi'+i).value.trim(), ok=false;
+    if(!raw){calc.fb[i]={t:'Írd be a választ.', c:'tip'}; updateQs(); return;}
+    if(i<5){
+      var s=raw.replace(/\s/g,'');
+      ok=/^\d+$/.test(s) && parseInt(s,10)===q.ans;
+    } else {
+      var p=parseProb(raw);
+      ok=(p!==null && Math.abs(p-THEORY)<0.1);
+    }
+    if(ok){
+      calc.solved[i]=true; calc.fb[i]={t:'Helyes! '+q.ok, c:'good'};
+    } else {
+      calc.tries[i]=(calc.tries[i]||0)+1;
+      var h=q.hints[Math.min(calc.tries[i]-1, q.hints.length-1)];
+      calc.fb[i]={t:'Még nem jó. '+h, c:'bad'};
+    }
+    afterQ();
+  }
+  function revealQ(i){
+    var q=QS[i-1];
+    $('qi'+i).value=q.show;
+    calc.solved[i]=true; calc.fb[i]={t:'A választ megmutattam. '+q.ok, c:'tip'};
+    afterQ();
+  }
+  function afterQ(){updateQs(); applyUnlock(); renderCompare();}
+
+  function renderCompare(){
+    var ok=!!calc.solved[5];
+    $('solveCard').hidden=!ok;
+    if(!ok) return;
+    $('cmpTheory').textContent=fmtPct(THEORY,3);
+    $('cmpExp').textContent=stats.runs?fmtPct(stats.falls/stats.runs*100,2):'–';
+    $('cmpNote').textContent=stats.runs
+      ? 'A kísérleted '+fmtInt(stats.runs)+' futásból áll. Minél több a futás, annál közelebb kerül az elméleti értékhez.'
+      : 'Még nincs kísérleted. Menj a Szimuláció fülre, futtass néhány ezer kört, és hasonlítsd össze az eredményt.';
+  }
+
+  function applyUnlock(){
+    var u=!!calc.solved[5], t=$('theoryToggle');
+    t.disabled=!u;
+    $('theoryLabel').textContent=u?'Mutasd az elméleti értéket':'Elméleti érték (a „Számold ki!” fülön oldod fel)';
+    if(!u){showTheory=false; t.checked=false;}
+    renderChart();
+  }
+
+  function onShowAll(){
+    var b=$('btnShowAll');
+    if(!showArmed){
+      b.textContent='Biztos? Ez elárulja a megoldást';
+      b.classList.add('arm');
+      showArmed=setTimeout(disarmShow,3000);
+      return;
+    }
+    disarmShow();
+    for(var n=0;n<256;n++){
+      var seq=[(n>>6)&3, (n>>4)&3, (n>>2)&3, n&3].map(function(v){return v+1;});
+      var ev=evalSeq(seq);
+      if(ev.fellAt) calc.found[seq.join('')]=ev.fellAt;
+    }
+    calc.last=''; calc.msg='';
+    renderCalc();
+  }
+  function disarmShow(){
+    clearTimeout(showArmed); showArmed=null;
+    var b=$('btnShowAll'); b.classList.remove('arm'); b.textContent='Elakadtál? Mutasd az összes kedvező utat';
+  }
+
+  function renderCalc(){renderBuilder(); renderFound(); updateQs(); renderCompare();}
+
+  function buildPad(){
+    var h='';
+    [1,2,3,4].forEach(function(k){
+      var d=DIRS[k];
+      h+='<button type="button" class="dirbtn" data-d="'+k+'" style="--c:var(--c-'+d.c+')" aria-label="'+d.n+'">'+arrowSVG(d.rot)+'<span>'+d.n+'</span></button>';
+    });
+    $('pad').innerHTML=h;
+  }
+
+  /* ---------- fülek ---------- */
+  function setCur(a,on){if(on) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current');}
+  function showTab(name){
+    var c=(name==='szamold-ki');
+    $('viewSim').hidden=c; $('viewCalc').hidden=!c;
+    setCur($('tabSim'),!c); setCur($('tabCalc'),c);
+    if(c){renderCalc();} else {renderStats(); renderChart();}
+  }
+  function tabFromHash(){return location.hash==='#szamold-ki'?'szamold-ki':'szimulacio';}
+
+  /* ---------- indulás ---------- */
+  function start(data){
+    if(data && data.stats && typeof data.stats.runs==='number') stats=data.stats;
+    showTheory=!!(data && data.showTheory);
+    $('theoryToggle').checked=showTheory;
+    if(data && data.calc){
+      calc.found=data.calc.found||{}; calc.solved=data.calc.solved||{}; calc.tries=data.calc.tries||{};
+      calc.fb=data.calc.fb||{}; calc.path=data.calc.path||[]; calc.last=data.calc.last||'';
+    }
+    buildStatic('stat','isl'); buildStatic('stat2','isl2'); buildDirs(); buildPad(); buildQs();
+    $('pad').addEventListener('click',function(e){var b=e.target.closest('.dirbtn'); if(b) calcAdd(parseInt(b.getAttribute('data-d'),10));});
+    $('btnUndo').addEventListener('click',function(){calc.path.pop(); calc.msg=''; renderCalc();});
+    $('btnClear').addEventListener('click',function(){calc.path=[]; calc.msg=''; renderCalc();});
+    $('btnShowAll').addEventListener('click',onShowAll);
+    $('qs').addEventListener('click',function(e){
+      var c=e.target.closest('[data-check]'), r=e.target.closest('[data-reveal]');
+      if(c) checkQ(parseInt(c.getAttribute('data-check'),10));
+      if(r) revealQ(parseInt(r.getAttribute('data-reveal'),10));
+    });
+    $('qs').addEventListener('keydown',function(e){
+      if(e.key==='Enter' && e.target.tagName==='INPUT') checkQ(parseInt(e.target.id.slice(2),10));
+    });
+    document.addEventListener('click',function(e){
+      var a=e.target.closest && e.target.closest('a[href^="#"]'); if(!a) return;
+      e.preventDefault(); var nm=a.getAttribute('href').slice(1); showTab(nm);
+      try{location.hash=nm;}catch(err){}
+    });
+    window.addEventListener('hashchange',function(){showTab(tabFromHash());});
+    $('btnMain').addEventListener('click',onMain);
+    $('btnAuto').addEventListener('click',onAuto);
+    $('reset').addEventListener('click',onReset);
+    var bb=document.querySelectorAll('.chip-btn');
+    Array.prototype.forEach.call(bb,function(b){
+      b.addEventListener('click',function(){onBatch(parseInt(b.getAttribute('data-n'),10));});
+    });
+    $('theoryToggle').addEventListener('change',function(e){showTheory=e.target.checked; renderChart();});
+    render();
+    renderCalc(); applyUnlock(); showTab(tabFromHash());
+  }
+  if(window.claude && window.claude.hot && window.claude.hot.snapshot){
+    window.claude.hot.snapshot(function(){return {stats:stats, showTheory:showTheory, calc:calc};});
+  }
+  if(window.claude && window.claude.hot && window.claude.hot.ready){
+    window.claude.hot.ready(start);
+  } else {
+    start((window.claude && window.claude.hot && window.claude.hot.data) || {});
+  }
+})();
+</script>
+
+</body></html>
